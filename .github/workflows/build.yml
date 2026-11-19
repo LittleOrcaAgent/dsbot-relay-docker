@@ -63,7 +63,7 @@ jobs:
       - name: Run the image and check it
         run: |
           set -euo pipefail
-          IMAGE="ghcr.io/${{ github.repository }}:sha-${GITHUB_SHA::7}"
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}:sha-${GITHUB_SHA::7}"
           docker run -d --name relay -p 8787:8787 "$IMAGE"
           code=000
           for _ in $(seq 1 30); do
@@ -74,6 +74,12 @@ jobs:
           test "$code" = "200"
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/)" = "404"
           test "$(docker exec relay id -u)" = "1000"
-          test "$(docker inspect --format '{{.State.Health.Status}}' relay)" = "healthy"
+          health=unknown
+          for _ in $(seq 1 20); do
+            health=$(docker inspect --format '{{.State.Health.Status}}' relay)
+            [ "$health" = "healthy" ] && break
+            sleep 2
+          done
+          test "$health" = "healthy"
           docker logs relay
           docker rm -f relay
